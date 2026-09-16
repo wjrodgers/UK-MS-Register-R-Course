@@ -1,0 +1,94 @@
+SYNTHETIC MS PARTICIPANTS AND EDSS - DATA DICTIONARY
+
+No records describe real people. The user's 42-row summary supplies targets
+for subgroup age means and SDs. Counts and individual-level correlations were
+not supplied. The agreed simulation uses 50 people per subgroup: 2,100 total.
+Equal subgroup sizes do not reproduce the prevalence of gender or MS types in
+the original population. Results pooled across groups depend on this choice.
+
+Participants.csv - one row per person (2,100 rows)
+UserId: unique integer ID linking to Scores.csv.
+Site: artificial North/South label, allocated cyclically, with inconsistent
+      capitalisation deliberately retained for the string-cleaning exercise.
+Gender: Female, Male, PNTS, preserving the supplied labels. PNTS is interpreted
+        here as prefer not to say; check its meaning in the source dictionary.
+ms_at_diagnosis: PPMS, RRMS, SPMS, Unknown, exactly as supplied.
+ms_type_now: Benign, PPMS, RRMS, SPMS, Unknown, exactly as supplied.
+age: synthetic age in years at 2025-12-31, rounded to two decimals.
+age_at_diagnosis: synthetic age at diagnosis in years.
+age_at_msnow: synthetic age associated with recording/classifying current MS
+              type; this field's precise original meaning was not supplied.
+
+The three age variables reproduce each supplied mean and sample SD within
+0.01 years. Within-person positive association is a simulation assumption.
+The generator uses shared bounded random variation with additional variation
+for the two historical ages, then centres/scales to match the supplied moments.
+It accepts adult current ages from 18 to 115 and historical ages from 0 to
+current age. It does not impose normal distributions or recover real people.
+The high mean age (93) for Male/SPMS/Benign is retained as supplied.
+
+Do not interpret all combinations of diagnosis/current MS labels as confirmed
+clinical transitions. The labels (including Benign and Unknown) are retained
+for reproducing the table, not reclassified into a clinical taxonomy.
+Unknown is an explicit source category, not an NA value.
+
+Age ordering
+The PNTS/RRMS/RRMS target has mean age_at_msnow 28.8 versus diagnosis age 29.2.
+It is impossible to preserve both means while requiring every msnow age to be
+at least the diagnosis age. We preserve the targets and flag individual rows
+where age_at_msnow < age_at_diagnosis (94 rows across the generated data).
+These flags ask for clarification of source meaning; they are not automatically
+corrected or excluded. Both historical ages are no greater than current age.
+
+Scores.csv - one row per synthetic EDSS assessment record (3151 rows)
+RecordId: unique integer record identifier; larger ID breaks a same-date tie.
+UserId: participant link. ID 9999 deliberately has no enrolled participant.
+CompletedDate: YYYY-MM-DD. Blank = unknown; cut-off is 2025-12-31.
+EDSS: simulated Expanded Disability Status Scale value. This ordinal scale
+has categories 0 and 1 to 10 in half steps; there is no 0.5 category. Higher
+values indicate greater disability, but equal numeric steps do not represent
+equal changes in disability. The generated living cohort uses 0 and 1 to 9.5;
+10 (death due to MS) is not generated. No neurological examinations are implied.
+EDSS reference: https://mstrust.org.uk/a-z/expanded-disability-status-scale-edss
+
+User-requested contrast follows CURRENT MS type, not type at diagnosis:
+Latent mean targets: Benign 1.5, PPMS 6, RRMS 5, SPMS 3.5, Unknown 2.5.
+Values are drawn with SD 1 and mapped to allowed categories. Rounding/bounds,
+missingness and record selection mean achieved means differ from these targets.
+This imposed ordering is a teaching scenario, not a claim about typical MS
+populations. In particular, the ordering of RRMS and SPMS is deliberately set
+by the request. Report medians/quartiles and counts when exploring EDSS; means
+are also exported to verify the requested simulation pattern.
+
+Deliberate teaching problems
+About 5% of latest EDSS values are missing, plus the special cases below.
+UserId 5: latest score missing despite an earlier assessment.
+UserId 6: latest raw score is 99, deliberately invalid, despite an earlier score.
+UserId 8: same-date tie; larger RecordId selects EDSS 2.
+UserId 10: only assessment is after the cut-off.
+UserId 11: only assessment has missing date.
+UserId 12: no assessment record.
+UserId 9999: unmatched assessment record.
+
+Cleaning and outputs
+Script 3 changes invalid EDSS to NA and retains raw files unchanged. It flags
+three score/date review records (UserIds 6, 10, 11). It selects the latest dated
+record on/before the cut-off, keeping a missing latest score as missing. It
+left-joins onto participants, so all 2,100 people remain. There are 2,097 people
+with eligible records, 2,014 observed EDSS scores and 86 missing EDSS values.
+Of those 86, three have no eligible record and 83 have a record with missing EDSS.
+
+Output/AnalysisData.csv is the cleaned one-row-per-person file INCLUDING EDSS.
+Output/Scores_clean.csv contains all assessment rows with invalid EDSS set to
+NA and date/score flags retained; it still contains unmatched/ineligible rows.
+Use AnalysisData for the participant-level exercise, not all assessment rows.
+Output/ReviewRecords.csv and UnmatchedScores.csv preserve the review evidence.
+Output/AgeOrderReview.csv contains the age-order flags for discussion.
+Output/Subgroup comparison.csv shows targets, achieved statistics and differences.
+Output/GroupSummary.csv describes latest EDSS by current MS type.
+
+Reproduction
+Instructor/Generate data.R uses set.seed(20260907). It deliberately overwrites
+the two teaching CSVs when run from the project. It is not needed during class.
+Instructor/Verify course.R rebuilds the analysis and checks targets, EDSS values,
+missingness, joins and the requested mean ordering. All these checks pass.
