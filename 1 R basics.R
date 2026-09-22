@@ -40,6 +40,8 @@ height_in_m
 
 # R is case sensitive: height and Height would be different objects.
 # Use names that will make sense when you come back to your work.
+
+# Logical comparisons (TRUE or FALSE)
 # <- stores a result. == asks whether two things are equal.
 
 height == 176
@@ -78,10 +80,36 @@ median(age)
 range(age)
 sum(age)
 
-# Getting help in R - try these in the Console when you need them
+######### Getting help in R (5 minutes, including practice) #########
 
-# ?mean
-# help(mean)
+# You do not need to memorise every function or its arguments.
+# Use ? followed by a function name, or help() with its name in quotes.
+# Use the name without calling it: ?mean rather than mean(age).
+# Run either line below to open the documentation in RStudio's Help pane.
+
+?mean
+help("mean")
+
+# How to read a help page:
+# Description: what does the function do?
+# Usage: how do you call it, and what are the default arguments?
+# Arguments: what can you supply or change? Find na.rm here.
+# Value: what does the function return?
+# Examples: small pieces of code you can copy, run and adapt.
+# Some pages describe several related methods. For mean, look at the default
+# method to find na.rm. You do not need to understand the whole page today.
+
+# Let's have a go (2 minutes within this section):
+# Open help("sd"). Find the default value of na.rm.
+# Predict sd(c(2, NA, 4)), then use the help page to calculate the SD of the
+# observed values. Explain to a partner which argument you changed.
+
+# If you don't know the exact function name, search installed documentation.
+# Try this in the Console: ??"standard deviation"
+# Later, for a package function, you can be specific:
+# help("filter", package = "dplyr")
+# The package must be installed. This avoids confusing dplyr's filter with
+# another function of the same name.
 
 ######### Sub-setting/indexing #########
 
@@ -89,6 +117,8 @@ sum(age)
 
 age[1]
 age[c(2, 4)]
+
+# A negative size removed the position
 age[-1]
 
 # Logical subsetting: TRUE = keep, FALSE = exclude
@@ -136,4 +166,12 @@ score[!is.na(score)]
 # Check the spelling and capitals, then check that you ran the assignment.
 # If the Console shows + instead of >, R is waiting for more code.
 # Check for an unclosed bracket or quote. Esc cancels an unfinished command.
-# Save your script. Saving code and running code are two different things.
+# Save your script often if you don't want to lose your work
+
+######### End-of-module checkpoint (5 minutes) #########
+# Work alone for 2 minutes, compare with a partner for 2, then share for 1.
+# Without copying the example, make a vector c(10, NA, 20, 30).
+# Predict mean() with and without na.rm = TRUE, then run both.
+# Can you explain to your partner the difference between removing NA from 
+# a calculation and imputation.
+

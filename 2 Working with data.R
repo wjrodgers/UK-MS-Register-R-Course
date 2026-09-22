@@ -4,7 +4,8 @@ library(tidyverse)
 ######### Working with data #########
 
 # This script runs from the course project without running script 1 first.
-# Today we're using fictional research data. See DataIn/Data dictionary.txt.
+# Today we're using fictional research data that looks similar to data you might
+# encounter on the UK MS Register.
 # Our question: what do the participants and their recorded EDSS scores look like?
 
 # Reference book: Sections 3.2 to 3.4, data structures, import and wrangling
@@ -15,7 +16,8 @@ library(tidyverse)
 ######### Dataframes and tibbles #########
 
 # Each row is one observation; each column is a variable.
-# Always ask what a row represents. Here it is one participant.
+# Always ask what a row represents (what is it unique by). 
+# Here it is one participant.
 # A tibble is a type of dataframe with slightly different printing/subsetting.
 
 participants <- tibble(
@@ -58,36 +60,36 @@ summary(Participants_raw)
 
 ######### Selecting, filtering and mutating #########
 
-# %>% is a pipe operator and means "then do"
-# Take this data %>%
+# |>is a pipe operator and means "then do"
+# Take this data |>
 #   do something with it
 
-Participants_raw %>%
-  select(UserId, Gender, age) %>%
+Participants_raw |>
+  select(UserId, Gender, age) |>
   head()
 
 # head() previews six rows so we do not print the whole dataset.
 # Select chooses columns; filter chooses rows
 
-Participants_raw %>%
-  filter(Gender == "Female") %>%
+Participants_raw |>
+  filter(Gender == "Female") |>
   head()
 
 # Missing ages would not pass this filter
 
-Participants_raw %>%
-  filter(!is.na(age) & age > 45) %>%
+Participants_raw |>
+  filter(!is.na(age) & age > 45) |>
   head()
 
 # mutate creates or changes a column
 # This only prints a result until we assign it to an object.
 # The synthetic age columns are in years at the fixed study reference date.
 
-Participants <- Participants_raw %>%
+Participants <- Participants_raw |>
   mutate(YearsSinceDiagnosis = age - age_at_diagnosis)
 
-Participants %>%
-  arrange(age) %>%
+Participants |>
+  arrange(age) |>
   head()
 
 ######### Working with Factors #########
@@ -95,9 +97,9 @@ Participants %>%
 # Factors store categories. We can choose the order in which they appear.
 # Let's check the values before converting them.
 
-Participants %>% count(Gender)
+Participants |>count(Gender)
 
-Participants <- Participants %>%
+Participants <- Participants |>
   mutate(Gender = factor(Gender, levels = c("Female", "Male", "PNTS")))
 
 levels(Participants$Gender)
@@ -109,13 +111,13 @@ str(Participants$Gender)
 
 ######### Summarising data #########
 
-Participants %>%
+Participants |>
   count(Gender)
 
 # n() counts rows; sum(!is.na(age)) counts observed ages
 
-Participants %>%
-  group_by(Gender) %>%
+Participants |>
+  group_by(Gender) |>
   summarise(N = n(),
             N_Age = sum(!is.na(age)),
             M_Age = mean(age, na.rm = TRUE),
@@ -127,10 +129,10 @@ Participants %>%
 
 ######### Let's have a go - Exercise 2 (10 minutes) #########
 
-# Count the participants at each Site in Participants_raw.
+# Count the participants at each Region in Participants_raw.
 # Select UserId and age for people with a known age greater than 45.
 # Calculate the median age and the number of missing ages in Participants.
-# Do the Site labels all look consistent? We'll deal with that after lunch.
+# Check the 12 Region labels. Why should we inspect them before grouping?
 
 ######### Exporting data #########
 
@@ -145,3 +147,10 @@ write.csv(Participants, file.path("Output", "Participants_practice.csv"),
 # Reference book: Section 3.6, Exporting data
 # https://intro2r.com/exporting-data.html
 
+
+######### End-of-module checkpoint (5 minutes) #########
+# Work alone for 2 minutes, compare with a partner for 2, then share for 1.
+# Count ms_at_diagnosis, then add Percentage = 100 * n / sum(n).
+# Check RRMS 56%, SPMS 24%, PPMS 12%, Unknown 8% and a total of 12,000.
+# Explain why count() answers this question but head() cannot.
+# Exit question: how does select() differ from filter()?

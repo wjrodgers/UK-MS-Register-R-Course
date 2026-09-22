@@ -1,187 +1,164 @@
-# Load any library that you will be using in this script at the top
+# Load libraries at the top. Open Introduction to R.Rproj before running.
 library(tidyverse)
 
 ################################################################################
-# file: 3 DataPrep.R
-# Revised teaching version based on Jeff Rodgers' original course scripts
-#
-# This file loads fictional research data, checks it and prepares one row per
-# participant for descriptive analysis. These are not UK MS Register records.
-# Open Introduction to R.Rproj. This script does not depend on scripts 1 or 2.
+# 3 DataPrep.R - Cleaning sparse registry-style data (75 minutes)
+# Fictional teaching data, NOT a UKMSR extract.
+# Aim: inspect missingness, validate dates/ages, document corrections/exclusions,
+# then create one row per eligible participant without discarding all sparse rows.
+# Run short sections and inspect results. No dependency on scripts 1 or 2.
+# Reading: https://intro2r.com/wrangling-data-frames.html
 ################################################################################
 
-# Reference book: Sections 3.3 and 3.4, importing and wrangling data
-# https://intro2r.com/importing-data.html
-# https://intro2r.com/wrangling-data-frames.html
-# Joins and string functions here are course extensions to that reading.
-
-######### Load raw data #########
-
-Participants_raw <- read.csv(file.path("DataIn", "Participants.csv"),
-                             na.strings = c("", "NA"),
-                             strip.white = TRUE, stringsAsFactors = FALSE)
-Scores_raw <- read.csv(file.path("DataIn", "Scores.csv"),
-                       na.strings = c("", "NA"),
-                       strip.white = TRUE, stringsAsFactors = FALSE)
-
-# Let's look at what we've just loaded into memory
-# Participants: one row per person. Scores: one row per assessment record.
-
+######### 1. Import and inspect: what does a row represent? #########
+Participants_raw <- read.csv("DataIn/Participants.csv", na.strings = c("", "NA"),
+                             stringsAsFactors = FALSE)
+Scores_raw <- read.csv("DataIn/Scores.csv", na.strings = c("", "NA"),
+                       colClasses = c(CompletedDate = "character"),
+                       stringsAsFactors = FALSE)
 dim(Participants_raw)
 dim(Scores_raw)
+head(Participants_raw)
 head(Scores_raw)
-str(Scores_raw)
-
-######### Check IDs before doing anything else #########
-
-Participants_raw %>% count(UserId) %>% filter(n > 1)
-Scores_raw %>% count(UserId) %>% filter(n > 1) %>% head()
-
-# Repeated people in Scores are expected; repeated participant IDs are not.
-# stopifnot stops the script if a required check is FALSE.
-
-stopifnot(!anyNA(Participants_raw$UserId),
-          anyDuplicated(Participants_raw$UserId) == 0,
-          !anyNA(Scores_raw$UserId),
-          !anyNA(Scores_raw$RecordId),
+# Participant row = one person; score row = one assessment. Repeated UserIds
+# in Scores are expected. Duplicate participant or record IDs need resolution.
+stopifnot(!anyNA(Participants_raw$UserId), anyDuplicated(Participants_raw$UserId) == 0,
+          !anyNA(Scores_raw$UserId), !anyNA(Scores_raw$RecordId),
           anyDuplicated(Scores_raw$RecordId) == 0)
 
-######### Basic string manipulation #########
+######### 2. Sparse data: describe before deciding #########
+MissingParticipants <- Participants_raw %>%
+  summarise(across(everything(), ~ sum(is.na(.x))))
+MissingScores <- Scores_raw %>%
+  summarise(across(everything(), ~ sum(is.na(.x))))
+MissingParticipants
+MissingScores
+Scores_raw %>% count(MissingDate = is.na(CompletedDate), MissingEDSS = is.na(EDSS))
+# Missing is not zero. A person without an onset age can still contribute to
+# EDSS summaries. Do not use na.omit() or drop_na() on the entire dataset.
+# Ask: what information is actually required for THIS analysis?
 
-Participants_raw %>% count(Site)
-
-# Trim spaces and use consistent case. Check that labels now make sense.
-
-Participants <- Participants_raw %>%
-  mutate(Site = str_to_lower(str_trim(Site)),
-         Gender = factor(Gender, levels = c("Female", "Male", "PNTS")),
+######### 3. Strings and ages #########
+Participants_raw %>% count(Region)
+Participants_checked <- Participants_raw %>%
+  mutate(Region = str_squish(Region),
+         Gender = factor(tolower(Gender), levels = c("female", "male", "pnts")),
          ms_at_diagnosis = factor(ms_at_diagnosis),
          ms_type_now = factor(ms_type_now),
          YearsSinceDiagnosis = age - age_at_diagnosis,
-         AgeOrderReview = age_at_msnow < age_at_diagnosis)
+         MissingOnset = is.na(age_at_onset),
+         OnsetAfterDiagnosis = !is.na(age_at_onset) & !is.na(age_at_diagnosis) &
+                               age_at_onset > age_at_diagnosis,
+         BadAge = (!is.na(age) & (age < 0 | age > 115)) |
+                  (!is.na(age_at_onset) & age_at_onset < 0) |
+                  (!is.na(age_at_diagnosis) & age_at_diagnosis < 0) |
+                  (!is.na(age_at_onset) & !is.na(age) & age_at_onset > age) |
+                  (!is.na(age_at_diagnosis) & !is.na(age) & age_at_diagnosis > age),
+         AgeOrderReview = !is.na(age_at_msnow) & !is.na(age_at_diagnosis) &
+                          age_at_msnow < age_at_diagnosis,
+         ExclusionReason = case_when(
+           OnsetAfterDiagnosis & BadAge ~ "Onset after diagnosis; implausible age",
+           OnsetAfterDiagnosis ~ "Onset after diagnosis",
+           BadAge ~ "Implausible age", TRUE ~ NA_character_))
+Participants_checked %>% count(Region)
+Participants_checked %>% count(MissingOnset, OnsetAfterDiagnosis)
+# age_at_onset means symptom onset; age_at_msnow is a separate source field.
+# Never relabel one as the other. The latter's ordering remains a review issue.
+# Missing onset cannot establish whether ordering is valid; retain and flag it.
+# Our exercise excludes illogical age records from this analysis, without
+# deleting source rows. In a real project query the source and agree rules first.
+ExcludedParticipants <- Participants_checked %>% filter(!is.na(ExclusionReason))
+Participants <- Participants_checked %>% filter(is.na(ExclusionReason))
+ExcludedParticipants %>% select(UserId, age_at_onset, age_at_diagnosis, ExclusionReason)
 
-Participants %>% count(Site)
-
-# The study reference date is fixed so results don't change tomorrow.
-# Ages are simulated in years at the reference date. Inspect ordering flags.
-# The source summary can have age_at_msnow earlier than age_at_diagnosis.
-# Keep these values for discussion, rather than inventing corrected ages.
-Participants %>% count(AgeOrderReview)
-
+######### 4. Date text, calendar validity and plausible range #########
+# A parseable date can still be implausible: 1900 and 1025 are real years!
+# This fictional extract covers assessments in 2025 ONLY. These limits belong
+# to this exercise; do not apply them indiscriminately to UKMSR historical data.
+EarliestDate <- as.Date("2025-01-01")
 ReferenceDate <- as.Date("2025-12-31")
 
-######### Working with dates and scores #########
-
-# Dates are YYYY-MM-DD. EDSS is an ordinal disability scale from 0 to 10.
-# Its valid categories are 0, then 1 to 10 in half steps (there is no 0.5).
-# Higher scores indicate greater disability; steps are not equal units.
-# These are synthetic EDSS values, not assessments of real people.
-# https://mstrust.org.uk/a-z/expanded-disability-status-scale-edss
-ValidEDSS <- c(0, seq(1, 10, by = 0.5))
+# Look at the range of Dates
+Scores_raw |> reframe(range_CompletedDate = range(CompletedDate,na.rm = TRUE))
 
 Scores <- Scores_raw %>%
-  mutate(CompletedDate = as.Date(CompletedDate, format = "%Y-%m-%d"),
-         BadDate = is.na(CompletedDate) | CompletedDate > ReferenceDate,
-         BadScore = !is.na(EDSS) & !EDSS %in% ValidEDSS)
-
-Scores %>% count(BadDate, BadScore)
-Scores %>% filter(BadDate | BadScore)
-
-# This is a teaching decision: set an invalid EDSS score to NA, keep the row.
-# Records without an eligible date cannot be used to identify a latest visit.
-# Save flagged records for review rather than silently removing the evidence.
-
+  rename(CompletedDate = CompletedDate, EDSS_raw = EDSS) %>%
+  mutate(DateCorrected = if_else(CompletedDate == '1025-01-15','2025-01-15',CompletedDate),
+         MissingDate = is.na(CompletedDate),
+         DateBeforeWindow = !is.na(CompletedDate) & CompletedDate < EarliestDate,
+         DateAfterWindow = !is.na(CompletedDate) & CompletedDate > ReferenceDate,
+         DateIssue = case_when(MissingDate ~ "Missing date",
+                               DateBeforeWindow ~ "Before extract window",
+                               DateAfterWindow ~ "After extract window",
+                               TRUE ~ "Eligible date"),
+         BadDate = DateIssue != "Eligible date",
+         BadScore = !is.na(EDSS_raw) & !EDSS_raw %in% c(0, seq(1, 10, 0.5)),
+         EDSS = if_else(BadScore, NA_real_, as.numeric(EDSS_raw)))
+Scores %>% count(DateIssue)
+Scores %>% filter(UserId %in% c(11, 14, 16, 18, 20)) %>%
+  select(UserId, CompletedDate, DateCorrected, DateIssue)
+# Invalid EDSS becomes NA; retain its original value and flag. A missing date
+# prevents chronological selection, not all possible uses of that assessment.
 ReviewRecords <- Scores %>% filter(BadDate | BadScore)
+ExcludedAssessments <- Scores %>% filter(BadDate)
 
-Scores <- Scores %>%
-  mutate(EDSS = if_else(BadScore, NA_real_, as.numeric(EDSS)))
-
-######### One row per participant #########
-
-# Our question uses the latest dated record on or before ReferenceDate.
-# If two records have the same date, take the larger RecordId.
-# This tie rule is for this exercise; check the source system in real work.
-# Keep a missing latest score. Don't silently substitute an earlier score.
-
+######### 5. Keep separate exclusion reasons and select a latest record #########
+# An unmatched ID differs from a known participant excluded by an age rule.
+UnmatchedScores <- Scores %>% anti_join(Participants_checked, by = "UserId")
+ScoresForExcludedParticipants <- Scores %>% semi_join(ExcludedParticipants, by = "UserId")
 LatestScores <- Scores %>%
+  semi_join(Participants, by = "UserId") %>%
   filter(!BadDate) %>%
   group_by(UserId) %>%
   arrange(CompletedDate, RecordId, .by_group = TRUE) %>%
-  slice_tail(n = 1) %>%
-  ungroup() %>%
+  slice_tail(n = 1) %>% ungroup() %>%
   select(UserId, RecordId, CompletedDate, EDSS)
-
-######### Joining data #########
-
-# First check for score IDs with no participant record
-# anti_join shows rows that have no match in the other table.
-
-UnmatchedScores <- Scores %>%
-  anti_join(Participants, by = "UserId")
-UnmatchedScores
-
-# left_join keeps every participant, including those without an eligible record.
-# Using all score records here would repeat participants in the result.
-
+# The later RecordId breaks a date tie for this exercise. Do not replace a
+# missing latest EDSS with an earlier nonmissing score: that changes the question.
 stopifnot(anyDuplicated(LatestScores$UserId) == 0)
-
 AnalysisData <- Participants %>%
   left_join(LatestScores, by = "UserId") %>%
   mutate(HasRecord = !is.na(RecordId))
-
+AnalysisData %>% count(HasRecord, MissingEDSS = is.na(EDSS))
 stopifnot(nrow(AnalysisData) == nrow(Participants),
-          anyDuplicated(AnalysisData$UserId) == 0)
+          nrow(Participants) + nrow(ExcludedParticipants) == nrow(Participants_raw))
 
-AnalysisData %>% count(HasRecord)
-AnalysisData %>% summarise(N = n(), MissingScore = sum(is.na(EDSS)))
-
-# An unmatched score is not a reason to add a new person to our cohort.
-# Missing score and no eligible assessment record are different things.
-# We have not replaced missing values with zero or with a group mean.
+######### 6. Audit the effect of cleaning #########
+CleaningFlow <- tibble(
+  Stage = c("Raw participants", "Excluded by age rules", "Eligible participants",
+            "Eligible participants with a dated assessment", "With observed latest EDSS"),
+  N = c(nrow(Participants_raw), nrow(ExcludedParticipants), nrow(AnalysisData),
+        sum(AnalysisData$HasRecord), sum(!is.na(AnalysisData$EDSS))))
+CleaningFlow
+# Diagnosis percentages and region counts refer to the original 12000 people;
+# exclusions can change their distribution in the analysis cohort.
+# Report exclusions and available denominators, not just the final complete rows.
 
 ######### Let's have a go - Exercise 3 (10 minutes) #########
+# 1. Count missing onset ages, dates and scores. Are these the same denominator?
+# 2. Trace IDs 14, 16, 18 and 20. Which can be corrected, and what is the evidence?
+# 3. Find onset-after-diagnosis records. Show their IDs and exclusion reasons.
+# 4. Explain why ID 23 stays despite a missing onset age.
+# 5. Compare nrow(AnalysisData) with sum(complete.cases(AnalysisData)). Why can
+#    complete.cases remove far too many rows, especially with audit columns?
 
-# How many people are in AnalysisData?
-# Which people have no eligible assessment record?
-# Which have an eligible record but a missing score?
-# Why might dropping every row with any NA remove more people than intended?
-# Hint: use filter(), HasRecord and is.na(EDSS).
-# Look at AgeOrderReview too. What would you ask the data provider?
-
-######### Exporting the prepared data #########
-
+######### Export clean data AND an audit trail #########
 dir.create("Output", showWarnings = FALSE)
-write.csv(AnalysisData, file.path("Output", "AnalysisData.csv"),
-          row.names = FALSE, na = "")
-write.csv(Scores, file.path("Output", "Scores_clean.csv"),
-          row.names = FALSE, na = "")
-write.csv(ReviewRecords, file.path("Output", "ReviewRecords.csv"),
-          row.names = FALSE, na = "")
-write.csv(UnmatchedScores, file.path("Output", "UnmatchedScores.csv"),
-          row.names = FALSE, na = "")
+write.csv(AnalysisData, "Output/AnalysisData.csv", row.names = FALSE, na = "")
+saveRDS(AnalysisData, "Output/AnalysisData.rds")
+write.csv(Scores, "Output/Scores_clean.csv", row.names = FALSE, na = "")
+write.csv(ReviewRecords, "Output/ReviewRecords.csv", row.names = FALSE, na = "")
+write.csv(UnmatchedScores, "Output/UnmatchedScores.csv", row.names = FALSE, na = "")
+write.csv(ExcludedParticipants, "Output/ExcludedParticipants.csv", row.names = FALSE, na = "")
+write.csv(ExcludedAssessments, "Output/ExcludedAssessments.csv", row.names = FALSE, na = "")
+write.csv(ScoresForExcludedParticipants, "Output/ScoresForExcludedParticipants.csv", row.names = FALSE, na = "")
+write.csv(CleaningFlow, "Output/CleaningFlow.csv", row.names = FALSE)
+write.csv(Participants_checked %>% filter(AgeOrderReview),
+          "Output/AgeOrderReview.csv", row.names = FALSE, na = "")
 
-write.csv(Participants %>% filter(AgeOrderReview),
-          file.path("Output", "AgeOrderReview.csv"), row.names = FALSE, na = "")
-
-# RDS keeps dates and factor levels when we read the data back into R.
-
-saveRDS(AnalysisData, file.path("Output", "AnalysisData.rds"))
-
-######### Optional - Reshaping data (after the core day) #########
-
-# Let's take two fictional measurements per person.
-# Wide: one row per person. Long: one row per person per occasion.
-
-Scores_wide <- tibble(UserId = 1:3,
-                     Baseline = c(2, 4, 6),
-                     FollowUp = c(2.5, NA, 6))
-
-Scores_long <- Scores_wide %>%
-  pivot_longer(cols = c(Baseline, FollowUp),
-               names_to = "Occasion", values_to = "EDSS")
-Scores_long
-
-# Missing follow-up values still represent measurement occasions.
-
-Scores_long %>%
-  pivot_wider(names_from = Occasion, values_from = EDSS)
+######### End-of-module checkpoint (5 minutes) #########
+# Alone for 2 minutes, pairs for 2, then share for 1:
+# Classify a missing onset age, a 1900 assessment date, a confirmed year typo
+# and onset after diagnosis as retain, correct or exclude for this analysis.
+# Explain which record level you exclude: participant or assessment.
+# Exit question: what evidence and denominator changes must you report?

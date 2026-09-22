@@ -3,6 +3,7 @@ library(tidyverse)
 
 ################################################################################
 # file: 4 DataExploration.R
+
 # Revised teaching version based on the original course work by Jeff Rodgers,
 # Sarah Knowles, Elaine Craig and Rod Middleton
 #
@@ -59,7 +60,7 @@ ScoreSummary <- AnalysisData %>%
             IQR_Score = IQR(EDSS, na.rm = TRUE))
 ScoreSummary
 
-# Q1 and Q3 are quartile endpoints; IQR is Q3 minus Q1.
+# Q1 and Q3 are quartile endpoints (25th and 75th percentiles); IQR is Q3 minus Q1.
 # na.rm = TRUE describes the available values; it does not solve missing data.
 # With no observed values a mean is NaN; with fewer than two an SD is NA.
 
@@ -67,7 +68,9 @@ ScoreSummary
 
 # Let's start with a histogram. What does it show that the mean doesn't?
 
-hist(AnalysisData$EDSS,
+# Explicit half-point bins put each EDSS category at a bin centre.
+# Ask: where are the two peaks, and what does the overall mean hide?
+hist(AnalysisData$EDSS, breaks = seq(-0.25, 10.25, by = 0.5),
      main = "Latest recorded EDSS",
      xlab = "Synthetic EDSS (0-10; higher = greater disability)",
      col = "lightblue")
@@ -99,7 +102,7 @@ PlotData <- AnalysisData %>% filter(!is.na(EDSS))
 # ggplot: data, mapping with aes(), then a geometry (what to draw).
 # + adds a plot layer. It is different from the data pipe %>%.
 
-ScorePlot <- ggplot(PlotData, aes(x = ms_type_now, y = EDSS)) +
+ScorePlot <- ggplot(PlotData, aes(x = ms_type_now, y = EDSS,colour = ms_type_now)) +
   geom_boxplot(outlier.shape = NA) +
   geom_point(alpha = 0.15, size = 0.8,
              position = position_jitter(width = 0.15, height = 0, seed = 1)) +
@@ -118,19 +121,33 @@ print(ScorePlot)
 
 ######### Saving results #########
 
+EDSSDistribution <- ggplot(PlotData, aes(x = EDSS)) +
+  geom_histogram(binwidth = 0.5, boundary = -0.25,
+                 fill = "lightblue", colour = "white") +
+  scale_x_continuous(breaks = 0:10, limits = c(-0.25, 10.25)) +
+  labs(title = "Bimodal distribution of latest EDSS",
+       subtitle = "Synthetic teaching data; one observed latest score per participant",
+       x = "EDSS", y = "Number of participants") +
+  theme_minimal()
+print(EDSSDistribution)
+ggsave(file.path("Output", "EDSS_distribution.png"), plot = EDSSDistribution,
+       width = 8, height = 5, units = "in", dpi = 150)
+write.csv(AnalysisData %>% count(EDSS, .drop = FALSE),
+          file.path("Output", "EDSS_distribution.csv"), row.names = FALSE, na = "")
+
 write.csv(GroupSummary, file.path("Output", "GroupSummary.csv"),
           row.names = FALSE, na = "")
 ggsave(file.path("Output", "Score_by_group.png"), plot = ScorePlot,
        width = 7, height = 4.5, units = "in", dpi = 150)
 
-######### Let's have a go - Exercise 4 (15 minutes) #########
+######### Let's have a go - Exercise 4 (20 minutes) #########
 
-# Describe the latest scores by Site rather than ms_type_now.
+# Describe the latest scores by Region rather than ms_type_now.
 # Include the total number of people, the number with a score and the median.
-# Change the plot to show Site and give it a useful title.
+# Change the plot to show Region and give it a useful title.
 # Save your plot to Output with a different filename.
 # Write two sentences describing the result, including the missing values.
-# What would you need to know before explaining a difference between sites?
+# What would you need to know before explaining a difference between regions?
 # Optional: recreate the supplied age summary using group_by(Gender,
 # ms_at_diagnosis, ms_type_now) and mean()/sd() for each of the three ages.
 
@@ -141,6 +158,15 @@ ggsave(file.path("Output", "Score_by_group.png"), plot = ScorePlot,
 # The raw data, cleaning choices and scripts are all part of the analysis.
 
 writeLines(capture.output(sessionInfo()), file.path("Output", "sessionInfo.txt"))
+
+
+######### End-of-module checkpoint (5 minutes) #########
+# Show a partner your saved region table and plot from Exercise 4.
+# Explain the denominator, missing-score count and one limitation.
+# Use coord_flip() if long region labels overlap.
+# Partner check: are the labels readable and does the text agree with the table?
+# Exit question: why is a difference between these simulated regions not evidence
+# of a difference in care? Save, restart R and rerun your analysis.
 
 ######### Optional - Exploring two numeric variables #########
 
@@ -153,4 +179,13 @@ ggplot(AgeScoreData, aes(x = age, y = EDSS)) +
        title = "Age and latest recorded EDSS") +
   theme_minimal()
 
+ggplot(AgeScoreData |> 
+         mutate(EDSS = as.factor(EDSS)), aes(x = EDSS,y = age,colour = EDSS)) +
+  geom_boxplot() +
+  labs(y = "Synthetic age in 2025 (years)",
+       x = "EDSS (0-10)",
+       title = "Age and latest recorded EDSS") +
+  theme_minimal()
+
 # Describe what you see. Association alone does not establish cause.
+
